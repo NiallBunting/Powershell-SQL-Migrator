@@ -1,0 +1,176 @@
+# A SQL Migrator - For running new pieces of SQL.
+pwsh -Version
+
+$FILE_LOCATION = $env:MIGRATOR_DIR
+$REPLACEMENTS = @(@{find="LOCATION = '";replace="test"})
+
+Write-Output "wWelcome To Migration"
+
+Function Open-Sql-Connection{
+  $server = $env:SQLSERVER
+  $database = $env:SQLDATABASE
+  $username = $env:SQLUSERNAME
+  $password = $env:SQLPASSWORD
+  $cs = "Data Source=$server;Initial Catalog=$database;User Id=$username;Password=$password;Integrated Security=false;"
+  $sql = new-object System.Data.SqlClient.SqlConnection
+  $sql.ConnectionString = $cs
+  $sql.Open()
+  $sql
+}
+
+Function Close-Sql-Connection{
+Param ($Sql)
+ $Sql.Close()
+ $Sql.Dispose()
+}
+
+Function Get-Or-Create-Migration-Table{
+Param ($sql)
+  try{
+    $cmd = $sql.CreateCommand()
+    $cmd.CommandText = "SELECT * FROM dbmigrations ORDER BY id DESC"
+    $data = $cmd.ExecuteReader()
+    $cmd.Dispose()
+    try{
+      $records = @()
+      while ($data.Read())
+      {
+        $records += @{id=$data.GetValue(0); filename=$data.GetValue(1)}
+      }
+      $records
+      $data.Close()
+      Write-Host "Loading Migration Records."
+    }
+    catch {
+      Write-Host "No Migrations Found."
+      $data.Close()
+    }
+  }
+  catch [System.Management.Automation.MethodInvocationException] {
+    Write-Host "Creating Migration Table."
+    $cmd.Dispose()
+    $cmd = $sql.CreateCommand()
+    $cmd.CommandText = "CREATE TABLE dbmigrations (id bigint PRIMARY KEY, filename nvarchar(100), created_at datetime default CURRENT_TIMESTAMP)"
+    [void]$cmd.ExecuteNonQuery()
+    $cmd.Dispose()
+  }
+}
+
+Function Get-Files{
+Param ($Directory)
+  $files = Get-ChildItem $Directory -Filter *.sql | Sort-Object
+  Write-Output $files
+  return
+}
+
+Function Filter-Missing-Files {
+Param ($files, $dbmigrations)
+ If (!$dbmigrations) {
+   return $files
+ }
+
+
+ # These could possibly changed around with the max stuff below.
+ foreach ($dbmigration in $dbmigrations){
+   $files = $files | Where-Object -FilterScript {($_.Name -ne $dbmigration.filename)}
+ }
+
+ $maxId = $dbmigrations[0].id
+ $files = $files | Where-Object -FilterScript {((Get-Id-From-Filename $_.Name) -gt $maxId)}
+
+ $files
+ return
+}
+
+# Split on GO and replace location
+Function Modify-Migrations {
+Param ($files)
+  $splitoption = [System.StringSplitOptions]::RemoveEmptyEntries
+  $fileandcontent = @()
+
+  foreach ($f in $files){
+
+    $filedata = Get-Content $f.FullName -Raw
+
+    # This is currently not generalisable. Replaces location directly
+    foreach ($replacement in $REPLACEMENTS) {
+      $filedata = $filedata -replace $replacement.find,$replacement.replace
+    }
+
+    $splitongo = $filedata.replace("`n","").replace("`r","").Split("GO", $splitoption)
+
+    For ($i=0; $i -lt $splitongo.Length; $i++) {
+      $fileandcontent += @{file=$f; content=$splitongo[$i]; part=$i} 
+    }
+  }
+
+  $fileandcontent
+}
+
+Function Execute-Migrations{
+Param ($fileandcontent)
+  $files = @()
+
+  foreach ($f in $fileandcontent){
+    $filedata = $f.content
+
+    try {
+      $cmd = $sql.CreateCommand()
+      $cmd.CommandText = $filedata
+      Write-Host $cmd.CommandText
+      [void]$cmd.ExecuteNonQuery()
+      $cmd.Dispose()
+    }
+    catch [System.Management.Automation.MethodInvocationException] {
+      $name = $f.file.Name
+      $part = $f.part
+      Write-Host "ERROR: Issue with the file: $name part: $part"
+      break
+    }
+
+    $files += $f.file
+  }
+  $files
+}
+
+Function Save-Completed-Migrations {
+Param ($files)
+  foreach ($f in $files){
+    $filename = $f.Name
+    $id = Get-Id-From-Filename $f.Name
+
+    $cmd = $sql.CreateCommand()
+    $cmd.CommandText = "INSERT INTO dbmigrations (id, filename) VALUES ($id, '$filename');"
+    Write-Host $cmd.CommandText
+    [void]$cmd.ExecuteNonQuery()
+    $cmd.Dispose()
+  }
+}
+
+Function Get-Id-From-Filename {
+Param ($file)
+  $regex = $file -match "^([0-9]+).*$"
+  $match = [convert]::ToInt32($matches[1], 10)
+  Write-Output $match
+}
+
+
+# Main
+$sql = Open-Sql-Connection
+
+$migrationdata = Get-Or-Create-Migration-Table $sql
+
+$allfiles = Get-Files $FILE_LOCATION
+
+$files = Filter-Missing-Files $allfiles $migrationdata
+
+#Output
+Write-Output "Changed Files:" $files
+
+$fileandcontents = Modify-Migrations $files
+
+$executedfiles = Execute-Migrations $fileandcontents
+
+Save-Completed-Migrations $executedfiles
+
+Close-Sql-Connection $sql
