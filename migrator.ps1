@@ -129,6 +129,7 @@ Param ($fileandcontent)
       Write-Host $cmd.CommandText
       [void]$cmd.ExecuteNonQuery()
       $cmd.Dispose()
+      # WARNING: This currently saves if a file is partially executed successfully.
       $files += $f.file
     }
     catch [System.Management.Automation.MethodInvocationException] {
