@@ -11,7 +11,7 @@ Function Open-Sql-Connection{
   $database = $env:SQLDATABASE
   $username = $env:SQLUSERNAME
   $password = $env:SQLPASSWORD
-  $cs = "Data Source=$server;Initial Catalog=$database;User Id=$username;Password=$password;Integrated Security=false;"
+  $cs = "Data Source=$server;Initial Catalog=$database;Integrated Security=false;User Id=$username;Password=$password"
   $sql = new-object System.Data.SqlClient.SqlConnection
   $sql.ConnectionString = $cs
   $sql.Open()
@@ -47,12 +47,19 @@ Param ($sql)
     }
   }
   catch [System.Management.Automation.MethodInvocationException] {
-    Write-Host "Creating Migration Table."
-    $cmd.Dispose()
-    $cmd = $sql.CreateCommand()
-    $cmd.CommandText = "CREATE TABLE dbmigrations (id bigint PRIMARY KEY, filename nvarchar(100), created_at datetime default CURRENT_TIMESTAMP)"
-    [void]$cmd.ExecuteNonQuery()
-    $cmd.Dispose()
+    try {
+      Write-Host "Creating Migration Table."
+      $cmd.Dispose()
+      $cmd = $sql.CreateCommand()
+      $cmd.CommandText = "CREATE TABLE dbmigrations (id bigint, filename nvarchar(100), created_at datetime2)"
+      [void]$cmd.ExecuteNonQuery()
+      $cmd.Dispose()
+    }
+    catch [System.Management.Automation.MethodInvocationException] {
+      echo "Failed to create dbmigrations table."
+      throw $_.Exception
+      exit 1
+    }
   }
 }
 
@@ -135,12 +142,15 @@ Param ($fileandcontent)
 
 Function Save-Completed-Migrations {
 Param ($files)
+
+  $files = $files | Sort-Object | Get-Unique
+
   foreach ($f in $files){
     $filename = $f.Name
     $id = Get-Id-From-Filename $f.Name
 
     $cmd = $sql.CreateCommand()
-    $cmd.CommandText = "INSERT INTO dbmigrations (id, filename) VALUES ($id, '$filename');"
+    $cmd.CommandText = "INSERT INTO dbmigrations (id, filename, created_at) VALUES ($id, '$filename', CURRENT_TIMESTAMP);"
     Write-Host $cmd.CommandText
     [void]$cmd.ExecuteNonQuery()
     $cmd.Dispose()
