@@ -127,15 +127,15 @@ Param ($fileandcontent)
       Write-Host $cmd.CommandText
       [void]$cmd.ExecuteNonQuery()
       $cmd.Dispose()
+      $files += $f.file
     }
     catch [System.Management.Automation.MethodInvocationException] {
       $name = $f.file.Name
       $part = $f.part
       Write-Host "ERROR: Issue with the file: $name part: $part"
+      Write-Host $_.Exception
       break
     }
-
-    $files += $f.file
   }
   $files
 }
@@ -150,7 +150,7 @@ Param ($files)
     $id = Get-Id-From-Filename $f.Name
 
     $cmd = $sql.CreateCommand()
-    $cmd.CommandText = "INSERT INTO dbmigrations (id, filename, created_at) VALUES ($id, '$filename', CURRENT_TIMESTAMP);"
+    $cmd.CommandText = "DECLARE @Date DATETIME; SET @Date = GETDATE(); INSERT INTO dbmigrations (id, filename, created_at) VALUES ($id, '$filename', @Date);"
     Write-Host $cmd.CommandText
     [void]$cmd.ExecuteNonQuery()
     $cmd.Dispose()
