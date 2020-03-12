@@ -125,6 +125,8 @@ cat << EOF > testdata/0003-go.sql
 INSERT INTO test (id, name) VALUES (3, 'three');
 GO
 INSERT INTO test (id, name) VALUES (4, 'four');
+GO
+
 EOF
 
 echo "-------------------- Running with GO. ------------------------------------"

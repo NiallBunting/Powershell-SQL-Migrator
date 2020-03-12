@@ -104,10 +104,12 @@ Param ($files)
       $filedata = $filedata -replace $replacement.find,$replacement.replace
     }
 
-    $splitongo = $filedata.replace("`n","").replace("`r","").Split("GO", $splitoption)
+    $splitongo = $filedata.replace("`n"," ").replace("`r"," ") -split "\s*GO\s*"
 
     For ($i=0; $i -lt $splitongo.Length; $i++) {
-      $fileandcontent += @{file=$f; content=$splitongo[$i]; part=$i} 
+      if (![string]::IsNullOrEmpty($splitongo[$i])) {
+        $fileandcontent += @{file=$f; content=$splitongo[$i]; part=$i} 
+      }
     }
   }
 
