@@ -2,7 +2,7 @@
 pwsh -Version
 
 $FILE_LOCATION = $env:MIGRATOR_DIR
-$REPLACEMENTS = @(@{find="LOCATION = '";replace="test"})
+$REPLACEMENTS = @(@{find="abfss://curated@heauksdev1datalake01.dfs.core.windows.net";replace=$env:SQLENVIRONMENT})
 
 Write-Output "wWelcome To Migration"
 
@@ -104,11 +104,11 @@ Param ($files)
       $filedata = $filedata -replace $replacement.find,$replacement.replace
     }
 
-    $splitongo = $filedata.replace("`n"," ").replace("`r"," ") -split "\s*GO\s*"
+    $splitongo = $filedata -split "^\s*GO\s*$",99999999,"Multiline"
 
     For ($i=0; $i -lt $splitongo.Length; $i++) {
       if (![string]::IsNullOrEmpty($splitongo[$i])) {
-        $fileandcontent += @{file=$f; content=$splitongo[$i]; part=$i} 
+        $fileandcontent += @{file=$f; content=$splitongo[$i].replace("`n"," ").replace("`r"," "); part=$i}
       }
     }
   }

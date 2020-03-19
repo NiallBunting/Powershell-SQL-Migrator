@@ -126,7 +126,6 @@ INSERT INTO test (id, name) VALUES (3, 'three');
 GO
 INSERT INTO test (id, name) VALUES (4, 'four');
 GO
-
 EOF
 
 echo "-------------------- Running with GO. ------------------------------------"
@@ -148,8 +147,10 @@ fi
 #####################################################################################
 
 #TODO
+export SQLENVIRONMENT=sa
+
 cat << EOF > testdata/0004-location-subsitute.sql
-INSERT INTO test (id, name) VALUES (1, 'LOCATION = '');
+INSERT INTO test (id, name) VALUES (1, 'abfss://curated@heauksdev1datalake01.dfs.core.windows.net');
 EOF
 
 echo "-------------------- Replace Location. -------------------------------"
@@ -223,7 +224,30 @@ fi
 
 #####################################################################################
 
-cat << EOF > testdata/0007-remove.sql
+cat << EOF > testdata/0007-inlinego.sql
+INSERT INTO test (id, name) VALUES (1, 'GOgo go GO test');
+GO
+EOF
+
+echo "-------------------- Running with new inline go. -----------------------------------"
+pwsh migrator.ps1
+
+migratorcount=$(pwsh testdata/migratorcount.ps1)
+testcount=$(pwsh testdata/testcount.ps1)
+
+if [ $migratorcount != 6 ]; then
+  echo "Migrator Count ($migratorcount) does not equal 6"
+  exit 1
+fi
+
+if [ $testcount != 7 ]; then
+  echo "Test Count ($testcount) does not equal 7"
+  exit 1
+fi
+
+#####################################################################################
+
+cat << EOF > testdata/0008-remove.sql
 DROP TABLE test;
 EOF
 
@@ -232,8 +256,8 @@ pwsh migrator.ps1
 
 migratorcount=$(pwsh testdata/migratorcount.ps1)
 
-if [ $migratorcount != 6 ]; then
-  echo "Migrator Count ($migratorcount) does not equal 6"
+if [ $migratorcount != 7 ]; then
+  echo "Migrator Count ($migratorcount) does not equal 7"
   exit 1
 fi
 
