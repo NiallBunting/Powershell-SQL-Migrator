@@ -2,7 +2,7 @@
 pwsh -Version
 
 $FILE_LOCATION = $env:MIGRATOR_DIR
-$REPLACEMENTS = @(@{find="abfss://curated@heauksdev1datalake01.dfs.core.windows.net";replace=$env:SQLENVIRONMENT})
+$REPLACEMENTS = @(@{find="abfss://<name>@<location>.dfs.core.windows.net";replace=$env:SQLENVIRONMENT})
 
 Write-Output "wWelcome To Migration"
 
